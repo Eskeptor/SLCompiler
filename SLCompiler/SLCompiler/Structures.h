@@ -3,6 +3,39 @@
 #include <vector>
 #include "Lexer.h"
 
+/**
+@brief		Delete pointer vector
+@param		v			Vector
+@return
+*/
+template <typename T>
+void DeleteVectorPtrArgs(std::vector<T*>& v)
+{
+	int nSize = (int)v.size();
+
+	if (nSize == 0)
+		return;
+
+	for (int i = 0; i < nSize; ++i)
+	{
+		delete v[i];
+		v[i] = nullptr;
+	}
+	v.clear();
+}
+
+/**
+@brief		Delete pointer
+@param		p			Pointer
+@return
+*/
+template <typename T>
+void DeletePtr(T* p)
+{
+	delete p;
+	p = nullptr;
+}
+
 // Statement structure
 struct stStatement
 {
@@ -25,6 +58,11 @@ public:
 	stExpStatement()
 		: stExp(nullptr)
 	{}
+
+	~stExpStatement()
+	{
+		DeletePtr<stExpression>(stExp);
+	}
 };
 
 // Function structure
@@ -41,31 +79,32 @@ public:
 	stFunction()
 		: strName("")
 	{}
+
+	~stFunction()
+	{
+		DeleteVectorPtrArgs<stStatement>(vBlock);
+	}
 };
 
 // Variable structure
 struct stVariable : stStatement
 {
 public:
-	// Data type enumerable
-	enum class eDataType
-	{
-		Void,
-		Int,
-		Double,
-		String,
-	};
-
 	// Variable name
 	std::string strName;
 	// Expression
 	stExpression* stExp;
 	// Data type
-	eDataType eType;
+	CLexer::eLexEnum eType;
 
 	stVariable()
-		: strName(""), stExp(nullptr), eType(eDataType::Void)
+		: strName(""), stExp(nullptr), eType(CLexer::eLexEnum::Void)
 	{}
+
+	~stVariable()
+	{
+		DeletePtr<stExpression>(stExp);
+	}
 };
 
 // Return statement structure
@@ -78,6 +117,11 @@ public:
 	stReturn()
 		: stExp(nullptr)
 	{}
+
+	~stReturn()
+	{
+		DeletePtr<stExpression>(stExp);
+	}
 };
 
 // For statement structure
@@ -96,6 +140,14 @@ public:
 	stFor()
 		: stVar(nullptr), stCondExp(nullptr), stLoopExp(nullptr)
 	{}
+
+	~stFor()
+	{
+		DeletePtr<stVariable>(stVar);
+		DeletePtr<stExpression>(stCondExp);
+		DeletePtr<stExpression>(stLoopExp);
+		DeleteVectorPtrArgs<stStatement>(stBlock);
+	}
 };
 
 // While statement structure
@@ -110,6 +162,12 @@ public:
 	stWhile()
 		: stCondExp(nullptr)
 	{}
+
+	~stWhile()
+	{
+		DeletePtr<stExpression>(stCondExp);
+		DeleteVectorPtrArgs<stStatement>(stBlock);
+	}
 };
 
 // If statement structure
@@ -125,6 +183,18 @@ public:
 
 	stIf()
 	{}
+
+	~stIf()
+	{
+		DeleteVectorPtrArgs<stStatement>(stCondStm);
+		DeleteVectorPtrArgs<stStatement>(vElseBlock);
+
+		int nSize = (int)vIfBlock.size();
+		if (nSize == 0)
+			return;
+		for (int i = 0; i < nSize; ++i)
+			DeleteVectorPtrArgs<stStatement>(vIfBlock[i]);
+	}
 };
 
 // Switch statement structure
@@ -139,6 +209,17 @@ public:
 	stSwitch()
 		: stVar(nullptr)
 	{}
+
+	~stSwitch()
+	{
+		DeletePtr<stVariable>(stVar);
+
+		int nSize = (int)vCaseBlock.size();
+		if (nSize == 0)
+			return;
+		for (int i = 0; i < nSize; ++i)
+			DeleteVectorPtrArgs<stStatement>(vCaseBlock[i]);
+	}
 };
 
 // Break statement structure
@@ -215,11 +296,16 @@ public:
 	{}
 };
 
-// Void data type structure
+// Void(pointer) data type structure
 struct stVoidData : stExpression
 {
 public:
+	// Data
+	void* pVoid;
 
+	stVoidData()
+		: pVoid(nullptr)
+	{}
 };
 
 // Array type structure
@@ -295,6 +381,12 @@ public:
 	stAnd()
 		: stLeft(nullptr), stRight(nullptr)
 	{}
+
+	~stAnd()
+	{
+		DeletePtr<stExpression>(stLeft);
+		DeletePtr<stExpression>(stRight);
+	}
 };
 
 // Or expression structure
@@ -309,6 +401,12 @@ public:
 	stOr()
 		: stLeft(nullptr), stRight(nullptr)
 	{}
+
+	~stOr()
+	{
+		DeletePtr<stExpression>(stLeft);
+		DeletePtr<stExpression>(stRight);
+	}
 };
 
 // Relational expression structure
@@ -325,6 +423,12 @@ public:
 	stRelational()
 		: stLeft(nullptr), stRight(nullptr), eType(CLexer::eLexEnum::Unknown)
 	{}
+
+	~stRelational()
+	{
+		DeletePtr<stExpression>(stLeft);
+		DeletePtr<stExpression>(stRight);
+	}
 };
 
 // Arithmetic expression structure
@@ -341,6 +445,12 @@ public:
 	stArithmetic()
 		: stLeft(nullptr), stRight(nullptr), eType(CLexer::eLexEnum::Unknown)
 	{}
+
+	~stArithmetic()
+	{
+		DeletePtr<stExpression>(stLeft);
+		DeletePtr<stExpression>(stRight);
+	}
 };
 
 // Unary expression structure
@@ -355,6 +465,11 @@ public:
 	stUnary()
 		: stSubExp(nullptr), eType(CLexer::eLexEnum::Unknown)
 	{}
+
+	~stUnary()
+	{
+		DeletePtr<stExpression>(stSubExp);
+	}
 };
 
 // Get variable data expression structure
@@ -377,6 +492,11 @@ public:
 	stSetVariable()
 		: strName(""), stInitExp(nullptr)
 	{}
+
+	~stSetVariable()
+	{
+		DeletePtr<stExpression>(stInitExp);
+	}
 };
 
 // Get array or container element data expression structure
@@ -391,6 +511,12 @@ public:
 	stGetElement()
 		: stMemsExp(nullptr), stIndexExp(nullptr)
 	{}
+
+	~stGetElement()
+	{
+		DeletePtr<stExpression>(stMemsExp);
+		DeletePtr<stExpression>(stIndexExp);
+	}
 };
 
 // Set array or container element data expression structure
@@ -407,6 +533,13 @@ public:
 	stSetElement()
 		: stMemsExp(nullptr), stIndexExp(nullptr), stInitExp(nullptr)
 	{}
+
+	~stSetElement()
+	{
+		DeletePtr<stExpression>(stMemsExp);
+		DeletePtr<stExpression>(stIndexExp);
+		DeletePtr<stExpression>(stInitExp);
+	}
 };
 
 // Call function expression structure
@@ -421,6 +554,11 @@ public:
 	stCallFunc()
 		: stSubExp(nullptr)
 	{}
+
+	~stCallFunc()
+	{
+		DeleteVectorPtrArgs<stExpression>(vArgsExp);
+	}
 };
 
 // Program structure
@@ -428,4 +566,9 @@ struct stProgram
 {
 public:
 	std::vector<stFunction*> vFunc;
+
+	~stProgram()
+	{
+		DeleteVectorPtrArgs<stFunction>(vFunc);
+	}
 };

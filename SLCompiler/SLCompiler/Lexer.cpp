@@ -51,7 +51,8 @@ std::unordered_map<std::string, CLexer::eLexEnum> CLexer::m_LexMap =
 	std::make_pair("]", eLexEnum::RightBraket),
 };
 
-std::string CLexer::m_nLexNumbers[static_cast<int>(CLexer::eLexEnum::EndOfLine)] =
+// Lex string
+std::string CLexer::m_strArrLex[static_cast<int>(CLexer::eLexEnum::EndOfLine)] =
 {
 	"Unknown",
 	"Null",
@@ -114,7 +115,7 @@ std::vector<CLexer::stToken> CLexer::Scan(std::string strSourceCode)
 	strSourceCode += '\0';
 
 	std::vector<stToken> vResult;
-	std::string::iterator iter = strSourceCode.begin();
+	siter iter = strSourceCode.begin();
 	bool bIsEndOfSource = false;
 	eCharType eType = eCharType::Unknown;
 	int nPrevIdentifierIdx = -1;
@@ -342,4 +343,3 @@ CLexer::stToken CLexer::ScanOperPunc(siter& iter)
 
 	return stToken(eLex, strString);
 }
-

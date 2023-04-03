@@ -100,7 +100,7 @@ public:
 // Variables ==============================================================================
 private:
 	static std::unordered_map<std::string, eLexEnum> m_LexMap;
-	static std::string m_nLexNumbers[static_cast<int>(eLexEnum::EndOfLine)];
+	static std::string m_strArrLex[static_cast<int>(eLexEnum::EndOfLine)];
 // ========================================================================================
 
 
@@ -109,7 +109,7 @@ public:
 	static std::vector<stToken> Scan(std::string strSourceCode);
 	inline static std::string FindLexToString(eLexEnum eLex)
 	{
-		return m_nLexNumbers[static_cast<int>(eLex)];
+		return m_strArrLex[static_cast<int>(eLex)];
 	}
 
 private:
@@ -124,6 +124,7 @@ private:
 	static stToken ScanString(siter& iter);
 	static stToken ScanIdentifierKeyword(siter& iter);
 	static stToken ScanOperPunc(siter& iter);
+
 // ========================================================================================
 
 };

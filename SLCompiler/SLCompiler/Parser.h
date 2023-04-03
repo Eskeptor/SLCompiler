@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_set>
 #include "Structures.h"
 #include "Lexer.h"
 
@@ -21,6 +22,8 @@ public:
 // Variables ==============================================================================
 private:
 	const static std::string LOG_TYPE[static_cast<int>(eLogType::LogTypeMax)];
+	static std::unordered_set<CLexer::eLexEnum> m_setRelOp;
+	static std::unordered_set<CLexer::eLexEnum> m_setCalOp;
 // ========================================================================================
 
 
@@ -44,6 +47,21 @@ private:
 	static stStatement* ParseBreak(vstToken::iterator& iter);
 	static stStatement* ParseContinue(vstToken::iterator& iter);
 	static stStatement* ParsePrint(vstToken::iterator& iter);
+	static stExpression* ParseOperand(vstToken::iterator& iter);
+	static stExpression* ParseNullData(vstToken::iterator& iter);
+	static stExpression* ParseBooleanData(vstToken::iterator& iter);
+	static stExpression* ParseIntData(vstToken::iterator& iter);
+	static stExpression* ParseDoubleData(vstToken::iterator& iter);
+	static stExpression* ParseStringData(vstToken::iterator& iter);
+	static stExpression* ParseVoidData(vstToken::iterator& iter);
+	static stExpression* ParseArrayData(vstToken::iterator& iter);
+	static stExpression* ParseAnd(vstToken::iterator& iter);
+	static stExpression* ParseOr(vstToken::iterator& iter);
+	static stExpression* ParseRelational(vstToken::iterator& iter);
+	static stExpression* ParseArithmetic(vstToken::iterator& iter);
+	static stExpression* ParseUnary(vstToken::iterator& iter);
+	static stExpression* ParseIdentifier(vstToken::iterator& iter);
+
 	static std::vector<stStatement*> ParseBlock(vstToken::iterator& iter);
 
 	static bool NextIter(CLexer::eLexEnum eLexCheckType, vstToken::iterator& iter, bool bCritical = true);

@@ -1,0 +1,4 @@
+1. Lexer			(O)
+2. Parser			(ing)
+3. Interpreter		(X)
+4. Code Run			(X)

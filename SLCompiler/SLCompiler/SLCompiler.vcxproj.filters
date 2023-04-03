@@ -28,4 +28,7 @@
       <Filter>Syntax Parser</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="TODO.txt" />
+  </ItemGroup>
 </Project>
