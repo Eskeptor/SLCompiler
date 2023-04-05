@@ -35,7 +35,6 @@ public:
 		Break,					// break
 		Continue,				// continue
 
-		Print,					// print()
 		Printf,					// printf()
 
 		LogicOpAnd,				// &&

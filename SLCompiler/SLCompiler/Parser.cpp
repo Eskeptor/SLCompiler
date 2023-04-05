@@ -22,38 +22,65 @@ std::unordered_set<CLexer::eLexEnum> CParser::m_setRelOp =
 // Calculational operator set
 std::unordered_set<CLexer::eLexEnum> CParser::m_setCalOp =
 {
-	CLexer::eLexEnum::OpAdd,
-	CLexer::eLexEnum::OpSubtract,
 	CLexer::eLexEnum::OpMultiply,
 	CLexer::eLexEnum::OpDivide,
 	CLexer::eLexEnum::OpModulo,
+	CLexer::eLexEnum::OpAdd,
+	CLexer::eLexEnum::OpSubtract,
 };
 
 /**
 @brief		Parser
 @param		vTokens			Token
-@return		Token to program structure
+@return		Token to "Program" structure
 */
 stProgram* CParser::Parser(vstToken vTokens)
 {
 	stProgram* pProg = new stProgram();
 	vstToken::iterator iter = vTokens.begin();
+	CLexer::eLexEnum eType = CLexer::eLexEnum::Unknown;
 
 	while (iter->eLex != CLexer::eLexEnum::EndOfLine)
 	{
 		switch (iter->eLex)
 		{
+			case CLexer::eLexEnum::True:
+			case CLexer::eLexEnum::False:
+			case CLexer::eLexEnum::Int:
+			case CLexer::eLexEnum::Double:
+			case CLexer::eLexEnum::String:
+			case CLexer::eLexEnum::Void:
+				eType = iter->eLex;
+				break;
 			case CLexer::eLexEnum::Function:
-				pProg->vFunc.push_back(ParseFunction(iter));
+				if (eType == CLexer::eLexEnum::Unknown)
+				{
+					// Error
+					break;
+				}
+				pProg->vFunc.push_back(ParseFunction(eType, iter));
+				eType = CLexer::eLexEnum::Unknown;
 				break;
 			default:
 				break;
+		}
+
+		if (pProg->vFunc[pProg->vFunc.size() - 1] == nullptr)
+		{
+			DeletePtr<stProgram>(pProg);
+			return nullptr;
 		}
 	}
 
 	return pProg;
 }
 
+/**
+@brief		Print log
+@param		eType		Log type
+@param		strLog		Log
+@return
+*/
 inline void CParser::PrintLog(eLogType eType, std::string strLog)
 {
 	printf("[%-5s] %s\n", LOG_TYPE[static_cast<int>(eType)].c_str(), strLog.c_str());
@@ -61,14 +88,15 @@ inline void CParser::PrintLog(eLogType eType, std::string strLog)
 
 /**
 @brief		Function parser
+@param		eType		Function's return type (use only Return)
 @param		iter		Token iterator
-@return		Token to function structure
+@return		Token to "Function" structure
 */
-stFunction* CParser::ParseFunction(vstToken::iterator& iter)
+stFunction* CParser::ParseFunction(CLexer::eLexEnum eType, vstToken::iterator& iter)
 {
 	stFunction* pFunc = new stFunction();
 
-	// Check function
+	// Check Function
 	NextIter(CLexer::eLexEnum::Function, iter);
 
 	// Check function name (function name is 'Identifier' type)
@@ -76,24 +104,40 @@ stFunction* CParser::ParseFunction(vstToken::iterator& iter)
 	NextIter(CLexer::eLexEnum::Identifier, iter);
 
 	// Check function parameters
+	// Check "("
 	NextIter(CLexer::eLexEnum::LeftParent, iter);
 	{
+		// if parameter is not empty
 		if (iter->eLex != CLexer::eLexEnum::RightParent)
 		{
+			// Check next parameters
+			// Check comma
 			while (NextIter(CLexer::eLexEnum::Comma, iter, false))
 			{
+				// Check parameter name
 				pFunc->vParams.push_back(iter->strString);
 				NextIter(CLexer::eLexEnum::Identifier, iter);
 			}
 		}
 	}
+	// Check ")"
 	NextIter(CLexer::eLexEnum::RightParent, iter);
 
-	// Check function context
+	// Check function block
+	// Check "{"
 	NextIter(CLexer::eLexEnum::LeftBrace, iter);
 	{
-		pFunc->vBlock = ParseBlock(iter);
+		pFunc->vBlock = ParseBlock(eType, iter);
+
+		if (pFunc->vBlock.size() == 1 &&
+			pFunc->vBlock[0] == nullptr)
+		{
+			PrintLog(eLogType::Error, "Block parse failed.");
+			DeletePtr<stFunction>(pFunc);
+			return nullptr;
+		}
 	}
+	// Check "}"
 	NextIter(CLexer::eLexEnum::RightBrace, iter);
 
 	return pFunc;
@@ -102,7 +146,7 @@ stFunction* CParser::ParseFunction(vstToken::iterator& iter)
 /**
 @brief		Variable parser
 @param		iter		Token iterator
-@return		Token to variable structure
+@return		Token to "Variable" structure
 */
 stVariable* CParser::ParseVariable(vstToken::iterator& iter)
 {
@@ -112,18 +156,23 @@ stVariable* CParser::ParseVariable(vstToken::iterator& iter)
 
 	for (int i = 0; i < nSize; ++i)
 	{
+		// Check Variable
 		if (NextIter(eArrType[i], iter, false))
 		{
 			pVar->eType = eArrType[i];
+
+			// Check variable name
 			pVar->strName = iter->strString;
 			NextIter(CLexer::eLexEnum::Identifier, iter);
 			break;
 		}
 	}
 
+	// Check assignment and expression
 	NextIter(CLexer::eLexEnum::Assignment, iter);
-
 	pVar->stExp = ParseExpression(iter);
+
+	// Check semicolon
 	NextIter(CLexer::eLexEnum::Semicolon, iter);
 
 	return pVar;
@@ -132,163 +181,335 @@ stVariable* CParser::ParseVariable(vstToken::iterator& iter)
 /**
 @brief		Expression statement parser
 @param		iter		Token iterator
-@return		Token to expression statement structure
+@return		Token to "Expression statement" structure
 */
 stExpStatement* CParser::ParseExpStatement(vstToken::iterator& iter)
 {
 	stExpStatement* pExp = new stExpStatement();
+
+	// Check expression
 	pExp->stExp = ParseExpression(iter);
+
+	// Check semicolon
 	NextIter(CLexer::eLexEnum::Semicolon, iter);
 
 	return pExp;
 }
 
 /**
-@brief
+@brief		Expression parser
 @param		iter		Token iterator
-@return
+@return		Token to "Expression" structure
 */
 stExpression* CParser::ParseExpression(vstToken::iterator& iter)
 {
-	stExpression* pExp = new stExpression();
-	
-	// TODO Input Code
-
-	return pExp;
-}
-
-/**
-@brief
-@param		iter		Token iterator
-@return
-*/
-stExpression* CParser::ParseAssignmentExpression(vstToken::iterator& iter)
-{
 	stExpression* pExp = ParseOr(iter);
-
-	// TODO Input Code
+	
+	// TODO Input Code ParseExpression
 
 	return pExp;
 }
 
 /**
-@brief
+@brief		Return parser
+@param		eType		Return type
 @param		iter		Token iterator
-@return
+@return		Token to "Return statement" structure
 */
-stStatement* CParser::ParseReturn(vstToken::iterator& iter)
+stStatement* CParser::ParseReturn(CLexer::eLexEnum eType, vstToken::iterator& iter)
 {
 	stReturn* pReturn = new stReturn();
 
-	// TODO Input Code
+	// Check Return
+	NextIter(CLexer::eLexEnum::Return, iter);
+
+	// Check return type
+	// if function's return
+	if (eType != CLexer::eLexEnum::Unknown)
+	{
+		pReturn->stExp = ParseExpression(iter);
+
+		if (pReturn->stExp == nullptr)
+		{
+			PrintLog(eLogType::Error, "Return expression is null.");
+			DeletePtr<stReturn>(pReturn);
+			return nullptr;
+		}
+	}
+
+	// Check semicolon
+	NextIter(CLexer::eLexEnum::Semicolon, iter);
 
 	return pReturn;
 }
 
 /**
-@brief
+@brief		For parser
 @param		iter		Token iterator
-@return
+@return		Token to "For statement" structure
 */
 stStatement* CParser::ParseFor(vstToken::iterator& iter)
 {
 	stFor* pFor = new stFor();
 
-	// TODO Input Code
+	// Check For
+	NextIter(CLexer::eLexEnum::For, iter);
+
+	// Check for loop expression
+	// Check "("
+	NextIter(CLexer::eLexEnum::LeftParent, iter);
+	{
+		// Check semicolon
+		// (if init expression is empty)
+		if (NextIter(CLexer::eLexEnum::Semicolon, iter, false) == false)
+		{
+			// Check "int"
+			// (For statement factor must be integer type)
+			NextIter(CLexer::eLexEnum::Int, iter);
+			pFor->stVar = new stVariable();
+
+			// Check variable name
+			pFor->stVar->strName = iter->strString;
+			NextIter(CLexer::eLexEnum::Identifier, iter);
+
+			// Check variable expression
+			NextIter(CLexer::eLexEnum::Assignment, iter);
+			pFor->stVar->stExp = ParseExpression(iter);
+			if (pFor->stVar->stExp == nullptr)
+			{
+				PrintLog(eLogType::Error, "For expression is null.");
+				DeletePtr<stFor>(pFor);
+				return nullptr;
+			}
+
+			// Check semicolon
+			NextIter(CLexer::eLexEnum::Semicolon, iter);
+		}
+
+		// Check semicolon
+		// (if condition expression is empty)
+		if (NextIter(CLexer::eLexEnum::Semicolon, iter, false) == false)
+		{
+			// Check condition expression
+			pFor->stCondExp = ParseExpression(iter);
+		}
+
+		// Check loop expression
+		pFor->stLoopExp = ParseExpression(iter);
+	}
+	// Check ")"
+	NextIter(CLexer::eLexEnum::RightParent, iter);
+
+	// Check "{"
+	NextIter(CLexer::eLexEnum::LeftBrace, iter);
+	{
+		// Check for block
+		pFor->stBlock = ParseBlock(CLexer::eLexEnum::Unknown, iter);
+	}
+	// Check "}"
+	NextIter(CLexer::eLexEnum::RightBrace, iter);
 
 	return pFor;
 }
 
 /**
-@brief
+@brief		While parser
 @param		iter		Token iterator
-@return
+@return		Token to "While statement" structure
 */
 stStatement* CParser::ParseWhile(vstToken::iterator& iter)
 {
 	stWhile* pWhile = new stWhile();
+	
+	// Check While
+	NextIter(CLexer::eLexEnum::While, iter);
 
-	// TODO Input Code
+	// Check while loop expression
+	// Check "("
+	NextIter(CLexer::eLexEnum::LeftParent, iter);
+	{
+		pWhile->stCondExp = ParseExpression(iter);
+
+		if (pWhile->stCondExp == nullptr)
+		{
+			PrintLog(eLogType::Error, "While expression is null.");
+			DeletePtr<stWhile>(pWhile);
+			return nullptr;
+		}
+	}
+	// Check ")"
+	NextIter(CLexer::eLexEnum::RightParent, iter);
+
+	// Check "{"
+	NextIter(CLexer::eLexEnum::LeftBrace, iter);
+	{
+		// Check for block
+		pWhile->stBlock = ParseBlock(CLexer::eLexEnum::Unknown, iter);
+	}
+	// Check "}"
+	NextIter(CLexer::eLexEnum::RightBrace, iter);
 
 	return pWhile;
 }
 
 /**
-@brief
+@brief		If parser
 @param		iter		Token iterator
-@return
+@return		Token to "If statement" structure
 */
 stStatement* CParser::ParseIf(vstToken::iterator& iter)
 {
 	stIf* pIf = new stIf();
 
-	// TODO Input Code
+	// Check If
+	NextIter(CLexer::eLexEnum::If, iter);
+	{
+		// Check if expression
+		// Check "("
+		NextIter(CLexer::eLexEnum::LeftParent, iter);
+		{
+			pIf->stCondStm.push_back(ParseExpression(iter));
+		}
+		// Check ")"
+		NextIter(CLexer::eLexEnum::RightParent, iter);
+
+		// Check "{"
+		NextIter(CLexer::eLexEnum::LeftBrace, iter);
+		{
+			// Check for block
+			pIf->vIfBlock.push_back(ParseBlock(CLexer::eLexEnum::Unknown, iter));
+		}
+		// Check "}"
+		NextIter(CLexer::eLexEnum::RightBrace, iter);
+	}
+	// Check "else if"
+	while (NextIter(CLexer::eLexEnum::Elif, iter, false))
+	{
+		// Check if expression
+		// Check "("
+		NextIter(CLexer::eLexEnum::LeftParent, iter);
+		{
+			pIf->stCondStm.push_back(ParseExpression(iter));
+		}
+		// Check ")"
+		NextIter(CLexer::eLexEnum::RightParent, iter);
+
+		// Check "{"
+		NextIter(CLexer::eLexEnum::LeftBrace, iter);
+		{
+			// Check for block
+			pIf->vIfBlock.push_back(ParseBlock(CLexer::eLexEnum::Unknown, iter));
+		}
+		// Check "}"
+		NextIter(CLexer::eLexEnum::RightBrace, iter);
+	}
+	// Check "else"
+	if (NextIter(CLexer::eLexEnum::If, iter, false))
+	{
+		// Check "{"
+		NextIter(CLexer::eLexEnum::LeftBrace, iter);
+		{
+			// Check for block
+			pIf->vElseBlock = ParseBlock(CLexer::eLexEnum::Unknown, iter);
+		}
+		// Check "}"
+		NextIter(CLexer::eLexEnum::RightBrace, iter);
+	}
 
 	return pIf;
 }
 
 /**
-@brief
+@brief		Switch parser
 @param		iter		Token iterator
-@return
+@return		Token to "Switch statement" structure
 */
 stStatement* CParser::ParseSwitch(vstToken::iterator& iter)
 {
 	stSwitch* pSwitch = new stSwitch();
 
-	// TODO Input Code
+	// TODO Input Code ParseSwitch
 
 	return pSwitch;
 }
 
-/**
-@brief
+/**	
+@brief		Break parser
 @param		iter		Token iterator
-@return
+@return		Token to "Break statement" structure
 */
 stStatement* CParser::ParseBreak(vstToken::iterator& iter)
 {
 	stBreak* pBreak = new stBreak();
 
-	// TODO Input Code
+	// Check Break
+	NextIter(CLexer::eLexEnum::Break, iter);
+
+	// Check semicolon
+	NextIter(CLexer::eLexEnum::Semicolon, iter);
 
 	return pBreak;
 }
 
 /**
-@brief
+@brief		Continue parser
 @param		iter		Token iterator
-@return
+@return		Token to "Continue statement" structure
 */
 stStatement* CParser::ParseContinue(vstToken::iterator& iter)
 {
 	stContinue* pContinue = new stContinue();
 
-	// TODO Input Code
+	// Check Continue
+	NextIter(CLexer::eLexEnum::Continue, iter);
+
+	// Check semicolon
+	NextIter(CLexer::eLexEnum::Semicolon, iter);
 
 	return pContinue;
 }
 
 /**
-@brief
+@brief		Printf parser
 @param		iter		Token iterator
-@return
+@return		Token to "Printf statement" structure
 */
-stStatement* CParser::ParsePrint(vstToken::iterator& iter)
+stStatement* CParser::ParsePrintf(vstToken::iterator& iter)
 {
 	stPrint* pPrint = new stPrint();
 
-	// TODO Input Code
+	// Check Printf
+	if (NextIter(CLexer::eLexEnum::Printf, iter, false))
+	{
+		// Check "("
+		NextIter(CLexer::eLexEnum::LeftParent, iter);
+		{
+			// Type1: printf("String");
+			// Type2: printf("%d", num);
+			while (iter->eLex != CLexer::eLexEnum::RightParent)
+			{
+				// TODO print¹® ÆÄ½Ì
+			}
+		}
+		// Check ")"
+		NextIter(CLexer::eLexEnum::RightParent, iter);
+	}
+	else
+	{
+		PrintLog(eLogType::Error, "Print statement is null.");
+		DeletePtr<stPrint>(pPrint);
+		return nullptr;
+	}
 
 	return pPrint;
 }
 
 /**
-@brief
+@brief		Data type parser
 @param		iter		Token iterator
-@return
+@return		Token to "Data type expression" structure
 */
-stExpression* CParser::ParseOperand(vstToken::iterator& iter)
+stExpression* CParser::ParseDataType(vstToken::iterator& iter)
 {
 	stExpression* pExp = nullptr;
 
@@ -327,11 +548,13 @@ stExpression* CParser::ParseOperand(vstToken::iterator& iter)
 /**
 @brief		Null data parser
 @param		iter		Token iterator
-@return		Token to null data structure
+@return		Token to "Null data" structure
 */
 stExpression* CParser::ParseNullData(vstToken::iterator& iter)
 {
 	stNullData* pNull = new stNullData();
+
+	// Check Null data
 	NextIter(CLexer::eLexEnum::Null, iter);
 
 	return pNull;
@@ -340,11 +563,13 @@ stExpression* CParser::ParseNullData(vstToken::iterator& iter)
 /**
 @brief		Boolean data parser
 @param		iter		Token iterator
-@return		Token to boolean data structure
+@return		Token to "Boolean data" structure
 */
 stExpression* CParser::ParseBooleanData(vstToken::iterator& iter)
 {
 	stBoolData* pBool = new stBoolData();
+
+	// Check Boolean (True or False) data
 	pBool->bData = iter->eLex == CLexer::eLexEnum::True;
 	NextIter(iter->eLex, iter);
 
@@ -354,11 +579,13 @@ stExpression* CParser::ParseBooleanData(vstToken::iterator& iter)
 /**
 @brief		Integer data parser
 @param		iter		Token iterator
-@return		Token to integer data structure
+@return		Token to "Integer data" structure
 */
 stExpression* CParser::ParseIntData(vstToken::iterator& iter)
 {
 	stIntData* pInt = new stIntData();
+
+	// Check Integer data
 	pInt->nData = std::stoi(iter->strString);
 	NextIter(CLexer::eLexEnum::Int, iter);
 
@@ -368,7 +595,7 @@ stExpression* CParser::ParseIntData(vstToken::iterator& iter)
 /**
 @brief		Double data parser
 @param		iter		Token iterator
-@return		Token to double data structure
+@return		Token to "Double data" structure
 */
 stExpression* CParser::ParseDoubleData(vstToken::iterator& iter)
 {
@@ -382,7 +609,7 @@ stExpression* CParser::ParseDoubleData(vstToken::iterator& iter)
 /**
 @brief		String data parser
 @param		iter		Token iterator
-@return		Token to string data structure
+@return		Token to "String data" structure
 */
 stExpression* CParser::ParseStringData(vstToken::iterator& iter)
 {
@@ -396,7 +623,7 @@ stExpression* CParser::ParseStringData(vstToken::iterator& iter)
 /**
 @brief		Void data parser
 @param		iter		Token iterator
-@return		Token to void data structure
+@return		Token to "Void data" structure
 */
 stExpression* CParser::ParseVoidData(vstToken::iterator& iter)
 {
@@ -409,7 +636,7 @@ stExpression* CParser::ParseVoidData(vstToken::iterator& iter)
 /**
 @brief		Array data parser
 @param		iter		Token iterator
-@return		Token to array data structure
+@return		Token to "Array data" structure
 */
 stExpression* CParser::ParseArrayData(vstToken::iterator& iter)
 {
@@ -434,35 +661,37 @@ stExpression* CParser::ParseArrayData(vstToken::iterator& iter)
 }
 
 /**
-@brief
+@brief		And parser
 @param		iter		Token iterator
-@return
+@return		Token to "And expression" structure
 */
 stExpression* CParser::ParseAnd(vstToken::iterator& iter)
 {
 	stAnd* pAnd = new stAnd();
 
-	//while ()
+	// TODO Input Code ParseAnd
 
 	return pAnd;
 }
 
 /**
-@brief
+@brief		Or parser
 @param		iter		Token iterator
-@return
+@return		Token to "Or expression" structure
 */
 stExpression* CParser::ParseOr(vstToken::iterator& iter)
 {
 	stOr* pOr = new stOr();
 
+	// TODO Input Code ParseOr
+
 	return pOr;
 }
 
 /**
-@brief
+@brief		Relational parser
 @param		iter		Token iterator
-@return
+@return		Token to "Relational expression" structure
 */
 stExpression* CParser::ParseRelational(vstToken::iterator& iter)
 {
@@ -471,21 +700,21 @@ stExpression* CParser::ParseRelational(vstToken::iterator& iter)
 	// Priority 0: *, /, %
 	// Priority 1: +, -
 
-	// TODO Input Code
+	// TODO Input Code ParseRelational
 
 	return pRel;
 }
 
 /**
-@brief
+@brief		Arithmetic parser
 @param		iter		Token iterator
-@return
+@return		Token to "Arithmetic expression" structure
 */
 stExpression* CParser::ParseArithmetic(vstToken::iterator& iter)
 {
 	stArithmetic* pArith = new stArithmetic();
 
-	// TODO Input Code
+	// TODO Input Code ParseArithmetic
 
 	return pArith;
 }
@@ -493,13 +722,13 @@ stExpression* CParser::ParseArithmetic(vstToken::iterator& iter)
 /**
 @brief		Unary parser
 @param		iter		Token iterator
-@return		Token to unary structure
+@return		Token to "Unary expression" structure
 */
 stExpression* CParser::ParseUnary(vstToken::iterator& iter)
 {
 	stUnary* pUn = new stUnary();
 
-	// TODO Input Code
+	// TODO Input Code ParseUnary
 
 	return pUn;
 }
@@ -507,7 +736,7 @@ stExpression* CParser::ParseUnary(vstToken::iterator& iter)
 /**
 @brief		Identifier parser
 @param		iter		Token iterator
-@return		Token to itentifier(stGetVariable) structure
+@return		Token to "Identifier expression" structure
 */
 stExpression* CParser::ParseIdentifier(vstToken::iterator& iter)
 {
@@ -519,11 +748,12 @@ stExpression* CParser::ParseIdentifier(vstToken::iterator& iter)
 }
 
 /**
-@brief
-@param
-@return
+@brief		Block parser
+@param		eType		Return type (use only Return)
+@param		iter		Token iterator
+@return		Token to "Block statements" structure
 */
-std::vector<stStatement*> CParser::ParseBlock(vstToken::iterator& iter)
+std::vector<stStatement*> CParser::ParseBlock(CLexer::eLexEnum eType, vstToken::iterator& iter)
 {
 	std::vector<stStatement*> vBlock;
 
@@ -535,7 +765,7 @@ std::vector<stStatement*> CParser::ParseBlock(vstToken::iterator& iter)
 				vBlock.push_back(ParseVariable(iter));
 				break;
 			case CLexer::eLexEnum::Return:
-				vBlock.push_back(ParseReturn(iter));
+				vBlock.push_back(ParseReturn(eType, iter));
 				break;
 			case CLexer::eLexEnum::For:
 				vBlock.push_back(ParseFor(iter));
@@ -555,16 +785,20 @@ std::vector<stStatement*> CParser::ParseBlock(vstToken::iterator& iter)
 			case CLexer::eLexEnum::Continue:
 				vBlock.push_back(ParseContinue(iter));
 				break;
-			case CLexer::eLexEnum::Print:
-				vBlock.push_back(ParsePrint(iter));
-				break;
 			case CLexer::eLexEnum::EndOfLine:
 				PrintLog(eLogType::Error, "EndOfLine checked before RightBrace came.");
-				exit(1);
+				vBlock.push_back(nullptr);
 				break;
 			default:
 				vBlock.push_back(ParseExpStatement(iter));
 				break;
+		}
+
+		if (vBlock[vBlock.size() - 1] == nullptr)
+		{
+			vBlock.clear();
+			vBlock.push_back(nullptr);
+			break;
 		}
 	}
 
@@ -572,8 +806,10 @@ std::vector<stStatement*> CParser::ParseBlock(vstToken::iterator& iter)
 }
 
 /**
-@brief
-@param
+@brief		Increment token iterator
+@param		eLexCheckType		Current iterator's eLex value
+@param		iter				Token iterator
+@param		bCritical			If eLexCheckType and iter->eLex are not the same, whether to terminate
 @return
 */
 bool CParser::NextIter(CLexer::eLexEnum eLexCheckType, vstToken::iterator& iter, bool bCritical)

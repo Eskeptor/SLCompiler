@@ -98,7 +98,7 @@ public:
 	CLexer::eLexEnum eType;
 
 	stVariable()
-		: strName(""), stExp(nullptr), eType(CLexer::eLexEnum::Void)
+		: strName(""), stExp(nullptr), eType(CLexer::eLexEnum::Int)
 	{}
 
 	~stVariable()
@@ -175,7 +175,7 @@ struct stIf : stStatement
 {
 public:
 	// If condition statements
-	std::vector<stStatement*> stCondStm;
+	std::vector<stExpression*> stCondStm;
 	// If expression block
 	std::vector<std::vector<stStatement*>> vIfBlock;
 	// Else expression block
@@ -186,7 +186,7 @@ public:
 
 	~stIf()
 	{
-		DeleteVectorPtrArgs<stStatement>(stCondStm);
+		DeleteVectorPtrArgs<stExpression>(stCondStm);
 		DeleteVectorPtrArgs<stStatement>(vElseBlock);
 
 		int nSize = (int)vIfBlock.size();
@@ -238,8 +238,14 @@ struct stContinue : stStatement
 struct stPrint : stStatement
 {
 public:
+	// Print format
+	std::string strFormat;
 	// Print arguments
 	std::vector<stExpression*> stArgs;
+
+	stPrint()
+		: strFormat("")
+	{}
 };
 
 // Null data type structure
