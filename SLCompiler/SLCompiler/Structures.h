@@ -1,7 +1,13 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <algorithm>
 #include "Lexer.h"
+
+#define CREATE_CHS(X)	char* chs = new char[X + 1]; \
+						memset(chs, 32, sizeof(char)* X); \
+						chs[X] = '\0';
+#define DELETE_CHS		DeleteArray<char>(chs);
 
 /**
 @brief		Delete pointer vector
@@ -36,16 +42,30 @@ void DeletePtr(T* p)
 	p = nullptr;
 }
 
+/**
+@brief		Delete dynamic 1D array
+@param		p			1D Array
+@return
+*/
+template <typename T>
+void DeleteArray(T p[])
+{
+	delete[] p;
+	p = nullptr;
+}
+
 // Statement structure
 struct stStatement
 {
-
+public:
+	virtual void Print(int nSpace) = 0;
 };
 
 // Expression structure
 struct stExpression
 {
-
+public:
+	virtual void Print(int nSpace) = 0;
 };
 
 // Statement that owns an Expression structure
@@ -62,6 +82,15 @@ public:
 	~stExpStatement()
 	{
 		DeletePtr<stExpression>(stExp);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sExp Statement:\n", chs);
+		if (stExp != nullptr)
+			stExp->Print(nSpace + 1);
+		DELETE_CHS;
 	}
 };
 
@@ -84,6 +113,16 @@ public:
 	{
 		DeleteVectorPtrArgs<stStatement>(vBlock);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		std::string strParam = "";
+		std::for_each(vParams.begin(), vParams.end(), [&strParam](std::string& str) {strParam += strParam + " "; });
+		printf("%sFunction %s(%s):\n", chs, strName.c_str(), strParam.c_str());
+		std::for_each(vBlock.begin(), vBlock.end(), [&nSpace](stStatement* pState) {pState->Print(nSpace + 1); });
+		DELETE_CHS;
+	}
 };
 
 // Variable structure
@@ -105,6 +144,15 @@ public:
 	{
 		DeletePtr<stExpression>(stExp);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sVariable(%s) %s:\n", chs, CLexer::FindLexToString(eType).c_str(), strName.c_str());
+		if (stExp != nullptr)
+			stExp->Print(nSpace + 1);
+		DELETE_CHS;
+	}
 };
 
 // Return statement structure
@@ -121,6 +169,15 @@ public:
 	~stReturn()
 	{
 		DeletePtr<stExpression>(stExp);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sReturn:\n", chs);
+		if (stExp != nullptr)
+			stExp->Print(nSpace + 1);
+		DELETE_CHS;
 	}
 };
 
@@ -148,6 +205,24 @@ public:
 		DeletePtr<stExpression>(stLoopExp);
 		DeleteVectorPtrArgs<stStatement>(stBlock);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sFor:\n", chs);
+		printf("%s Init-statement:\n", chs);
+		if (stVar != nullptr)
+			stVar->Print(nSpace + 2);
+		printf("%s Condition-expression:\n", chs);
+		if (stCondExp != nullptr)
+			stCondExp->Print(nSpace + 2);
+		printf("%s Loop-expression:\n", chs);
+		if (stLoopExp != nullptr)
+			stLoopExp->Print(nSpace + 2);
+		printf("%s Block:\n", chs);
+		std::for_each(stBlock.begin(), stBlock.end(), [&nSpace](stStatement* pState) {pState->Print(nSpace + 2); });
+		DELETE_CHS;
+	}
 };
 
 // While statement structure
@@ -167,6 +242,18 @@ public:
 	{
 		DeletePtr<stExpression>(stCondExp);
 		DeleteVectorPtrArgs<stStatement>(stBlock);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sWhile:\n", chs);
+		printf("%s Condition-expression:\n", chs);
+		if (stCondExp != nullptr)
+			stCondExp->Print(nSpace + 2);
+		printf("%s Block:\n", chs);
+		std::for_each(stBlock.begin(), stBlock.end(), [&nSpace](stStatement* pState) {pState->Print(nSpace + 2); });
+		DELETE_CHS;
 	}
 };
 
@@ -195,24 +282,51 @@ public:
 		for (int i = 0; i < nSize; ++i)
 			DeleteVectorPtrArgs<stStatement>(vIfBlock[i]);
 	}
+
+	void Print(int nSpace) override
+	{
+		_ASSERT(stCondStm.size() == vIfBlock.size());
+
+		CREATE_CHS(nSpace);
+		int nSize = (int)stCondStm.size();
+		for (int i = 0; i < nSize; ++i)
+		{
+			if (i == 0)
+				printf("%sIf:\n", chs);
+			else
+				printf("%sElif:\n", chs);
+			printf("%s Condition-expression:\n", chs);
+			stCondStm[i]->Print(nSpace + 2);
+			printf("%s Block:\n", chs);
+			std::for_each(vIfBlock[i].begin(), vIfBlock[i].end(), [&nSpace](stStatement* pState) {pState->Print(nSpace + 2); });
+		}
+		printf("%sElse:\n", chs);
+		printf("%s Block:\n", chs);
+		std::for_each(vElseBlock.begin(), vElseBlock.end(), [&nSpace](stStatement* pState) {pState->Print(nSpace + 2); });
+
+		DELETE_CHS;
+	}
 };
 
 // Switch statement structure
 struct stSwitch : stStatement
 {
 public:
-	// Switch variable (Init-statement)
-	stVariable* stVar;
+	// Switch condition statements
+	stExpression* stExp;
+	// Case condition statement
+	std::vector<stExpression*> stCondStm;
 	// Switch case, default statements block
 	std::vector<std::vector<stStatement*>> vCaseBlock;
 
 	stSwitch()
-		: stVar(nullptr)
+		: stExp(nullptr)
 	{}
 
 	~stSwitch()
 	{
-		DeletePtr<stVariable>(stVar);
+		DeletePtr<stExpression>(stExp);
+		DeleteVectorPtrArgs<stExpression>(stCondStm);
 
 		int nSize = (int)vCaseBlock.size();
 		if (nSize == 0)
@@ -220,18 +334,51 @@ public:
 		for (int i = 0; i < nSize; ++i)
 			DeleteVectorPtrArgs<stStatement>(vCaseBlock[i]);
 	}
+
+	void Print(int nSpace) override
+	{
+		_ASSERT(stCondStm.size() == vCaseBlock.size());
+
+		CREATE_CHS(nSpace);
+		printf("%sSwitch:\n", chs);
+		printf("%s Init-statement:\n", chs);
+		if (stExp != nullptr)
+			stExp->Print(nSpace + 2);
+		int nSize = (int)stCondStm.size();
+		for (int i = 0; i < nSize; ++i)
+		{
+			printf("%s Case:\n", chs);
+			printf("%s Condition-expression:\n", chs);
+			stCondStm[i]->Print(nSpace + 2);
+			printf("%s Block:\n", chs);
+			std::for_each(vCaseBlock[i].begin(), vCaseBlock[i].end(), [&nSpace](stStatement* pState) {pState->Print(nSpace + 2); });
+		}
+		DELETE_CHS;
+	}
 };
 
 // Break statement structure
 struct stBreak : stStatement
 {
-
+public:
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sBreak:\n", chs);
+		DELETE_CHS;
+	}
 };
 
 // Continue statement Structure
 struct stContinue : stStatement
 {
-
+public:
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sContinue:\n", chs);
+		DELETE_CHS;
+	}
 };
 
 // Print statement structure
@@ -246,12 +393,33 @@ public:
 	stPrint()
 		: strFormat("")
 	{}
+
+	~stPrint()
+	{
+		DeleteVectorPtrArgs<stExpression>(stArgs);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sPrint:\n", chs);
+		printf("%s Format: %s\n", chs, strFormat.c_str());
+		printf("%s Arguments:\n", chs);
+		std::for_each(stArgs.begin(), stArgs.end(), [&nSpace](stExpression* pExp) {pExp->Print(nSpace + 2); });
+		DELETE_CHS;
+	}
 };
 
 // Null data type structure
 struct stNullData : stExpression
 {
-
+public:
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sNull Data:\n", chs);
+		DELETE_CHS;
+	}
 };
 
 // Boolean data type structure
@@ -264,6 +432,13 @@ public:
 	stBoolData()
 		: bData(false)
 	{}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sBoolean Data: %s\n", chs, bData ? "true" : "false");
+		DELETE_CHS;
+	}
 };
 
 // Integer data type structure
@@ -276,6 +451,13 @@ public:
 	stIntData()
 		: nData(0)
 	{}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sInteger Data: %d\n", chs, nData);
+		DELETE_CHS;
+	}
 };
 
 // Double data type structure
@@ -288,6 +470,13 @@ public:
 	stDoubleData()
 		: dData(0.0)
 	{}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sDouble Data: %f\n", chs, dData);
+		DELETE_CHS;
+	}
 };
 
 // String data type structure
@@ -300,6 +489,13 @@ public:
 	stStringData()
 		: strData("")
 	{}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sString Data: %s\n", chs, strData.c_str());
+		DELETE_CHS;
+	}
 };
 
 // Void(pointer) data type structure
@@ -312,6 +508,13 @@ public:
 	stVoidData()
 		: pVoid(nullptr)
 	{}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sVoid Data: %p\n", chs, &pVoid);
+		DELETE_CHS;
+	}
 };
 
 // Array type structure
@@ -373,6 +576,13 @@ public:
 		delete m_stArrExp[nIdx];
 		m_stArrExp[nIdx] = pExp;
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		// TODO Print Array
+		DELETE_CHS;
+	}
 };
 
 // And expression structure
@@ -393,6 +603,19 @@ public:
 		DeletePtr<stExpression>(stLeft);
 		DeletePtr<stExpression>(stRight);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sAnd:\n", chs);
+		printf("%s Left:\n", chs);
+		if (stLeft != nullptr)
+			stLeft->Print(nSpace + 2);
+		printf("%s Right:\n", chs);
+		if (stRight != nullptr)
+			stRight->Print(nSpace + 2);
+		DELETE_CHS;
+	}
 };
 
 // Or expression structure
@@ -412,6 +635,19 @@ public:
 	{
 		DeletePtr<stExpression>(stLeft);
 		DeletePtr<stExpression>(stRight);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sOr:\n", chs);
+		printf("%s Left:\n", chs);
+		if (stLeft != nullptr)
+			stLeft->Print(nSpace + 2);
+		printf("%s Right:\n", chs);
+		if (stRight != nullptr)
+			stRight->Print(nSpace + 2);
+		DELETE_CHS;
 	}
 };
 
@@ -435,6 +671,19 @@ public:
 		DeletePtr<stExpression>(stLeft);
 		DeletePtr<stExpression>(stRight);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sRelational(%s):\n", chs, CLexer::FindLexToString(eType).c_str());
+		printf("%s Left:\n", chs);
+		if (stLeft != nullptr)
+			stLeft->Print(nSpace + 2);
+		printf("%s Right:\n", chs);
+		if (stRight != nullptr)
+			stRight->Print(nSpace + 2);
+		DELETE_CHS;
+	}
 };
 
 // Arithmetic expression structure
@@ -457,6 +706,19 @@ public:
 		DeletePtr<stExpression>(stLeft);
 		DeletePtr<stExpression>(stRight);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sArithmetic(%s):\n", chs, CLexer::FindLexToString(eType).c_str());
+		printf("%s Left:\n", chs);
+		if (stLeft != nullptr)
+			stLeft->Print(nSpace + 2);
+		printf("%s Right:\n", chs);
+		if (stRight != nullptr)
+			stRight->Print(nSpace + 2);
+		DELETE_CHS;
+	}
 };
 
 // Unary expression structure
@@ -476,6 +738,16 @@ public:
 	{
 		DeletePtr<stExpression>(stSubExp);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+		printf("%sUnary(%s):\n", chs, CLexer::FindLexToString(eType).c_str());
+		printf("%s Subsituation expression:\n", chs);
+		if (stSubExp != nullptr)
+			stSubExp->Print(nSpace + 2);
+		DELETE_CHS;
+	}
 };
 
 // Get variable data expression structure
@@ -484,6 +756,13 @@ struct stGetVariable : stExpression
 public:
 	// Variable name
 	std::string strName;
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+
+		DELETE_CHS;
+	}
 };
 
 // Set variable data expression structure
@@ -502,6 +781,13 @@ public:
 	~stSetVariable()
 	{
 		DeletePtr<stExpression>(stInitExp);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+
+		DELETE_CHS;
 	}
 };
 
@@ -522,6 +808,13 @@ public:
 	{
 		DeletePtr<stExpression>(stMemsExp);
 		DeletePtr<stExpression>(stIndexExp);
+	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+
+		DELETE_CHS;
 	}
 };
 
@@ -546,6 +839,13 @@ public:
 		DeletePtr<stExpression>(stIndexExp);
 		DeletePtr<stExpression>(stInitExp);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+
+		DELETE_CHS;
+	}
 };
 
 // Call function expression structure
@@ -565,6 +865,13 @@ public:
 	{
 		DeleteVectorPtrArgs<stExpression>(vArgsExp);
 	}
+
+	void Print(int nSpace) override
+	{
+		CREATE_CHS(nSpace);
+
+		DELETE_CHS;
+	}
 };
 
 // Program structure
@@ -576,5 +883,17 @@ public:
 	~stProgram()
 	{
 		DeleteVectorPtrArgs<stFunction>(vFunc);
+	}
+
+	void Print()
+	{
+		std::vector<stFunction*>::iterator iter = vFunc.begin();
+
+		while (iter != vFunc.begin())
+		{
+			(*iter)->Print(0);
+
+			++iter;
+		}
 	}
 };

@@ -23,7 +23,8 @@ public:
 private:
 	const static std::string LOG_TYPE[static_cast<int>(eLogType::LogTypeMax)];
 	static std::unordered_set<CLexer::eLexEnum> m_setRelOp;
-	static std::unordered_set<CLexer::eLexEnum> m_setCalOp;
+	static std::unordered_set<CLexer::eLexEnum> m_setCalOp1;
+	static std::unordered_set<CLexer::eLexEnum> m_setCalOp2;
 // ========================================================================================
 
 
@@ -57,7 +58,7 @@ private:
 	static stExpression* ParseAnd(vstToken::iterator& iter);
 	static stExpression* ParseOr(vstToken::iterator& iter);
 	static stExpression* ParseRelational(vstToken::iterator& iter);
-	static stExpression* ParseArithmetic(vstToken::iterator& iter);
+	static stExpression* ParseArithmetic(bool bIsPriority, vstToken::iterator& iter);
 	static stExpression* ParseUnary(vstToken::iterator& iter);
 	static stExpression* ParseIdentifier(vstToken::iterator& iter);
 

@@ -20,11 +20,14 @@ std::unordered_set<CLexer::eLexEnum> CParser::m_setRelOp =
 };
 
 // Calculational operator set
-std::unordered_set<CLexer::eLexEnum> CParser::m_setCalOp =
+std::unordered_set<CLexer::eLexEnum> CParser::m_setCalOp1 =
 {
 	CLexer::eLexEnum::OpMultiply,
 	CLexer::eLexEnum::OpDivide,
 	CLexer::eLexEnum::OpModulo,
+};
+std::unordered_set<CLexer::eLexEnum> CParser::m_setCalOp2 =
+{
 	CLexer::eLexEnum::OpAdd,
 	CLexer::eLexEnum::OpSubtract,
 };
@@ -428,7 +431,31 @@ stStatement* CParser::ParseSwitch(vstToken::iterator& iter)
 {
 	stSwitch* pSwitch = new stSwitch();
 
-	// TODO Input Code ParseSwitch
+	// Check Switch
+	NextIter(CLexer::eLexEnum::Switch, iter);
+	// Check Switch expression
+	// Check "("
+	NextIter(CLexer::eLexEnum::LeftParent, iter);
+	{
+		pSwitch->stExp = ParseExpression(iter);
+	}
+	// Check ")"
+	NextIter(CLexer::eLexEnum::RightParent, iter);
+
+	// Check "{"
+	NextIter(CLexer::eLexEnum::LeftBrace, iter);
+	{
+		// Check Case
+		while (NextIter(CLexer::eLexEnum::Case, iter, false))
+		{
+			// Check codition statement
+			pSwitch->stCondStm.push_back(ParseIntData(iter));
+			NextIter(CLexer::eLexEnum::Colon, iter);
+			pSwitch->vCaseBlock.push_back(ParseBlock(CLexer::eLexEnum::Unknown, iter));
+		}
+	}
+	// Check "}"
+	NextIter(CLexer::eLexEnum::RightBrace, iter);
 
 	return pSwitch;
 }
@@ -667,11 +694,17 @@ stExpression* CParser::ParseArrayData(vstToken::iterator& iter)
 */
 stExpression* CParser::ParseAnd(vstToken::iterator& iter)
 {
-	stAnd* pAnd = new stAnd();
+	stExpression* pRel = ParseRelational(iter);
 
-	// TODO Input Code ParseAnd
+	while (NextIter(CLexer::eLexEnum::LogicOpAnd, iter, false))
+	{
+		stAnd* pAnd = new stAnd();
+		pAnd->stLeft = pRel;
+		pAnd->stRight = ParseRelational(iter);
+		pRel = pAnd;
+	}
 
-	return pAnd;
+	return pRel;
 }
 
 /**
@@ -681,11 +714,17 @@ stExpression* CParser::ParseAnd(vstToken::iterator& iter)
 */
 stExpression* CParser::ParseOr(vstToken::iterator& iter)
 {
-	stOr* pOr = new stOr();
+	stExpression* pAnd = ParseAnd(iter);
 
-	// TODO Input Code ParseOr
+	while (NextIter(CLexer::eLexEnum::LogicOpOr, iter, false))
+	{
+		stOr* pOr = new stOr();
+		pOr->stLeft = pAnd;
+		pOr->stRight = ParseAnd(iter);
+		pAnd = pOr;
+	}
 
-	return pOr;
+	return pAnd;
 }
 
 /**
@@ -695,14 +734,19 @@ stExpression* CParser::ParseOr(vstToken::iterator& iter)
 */
 stExpression* CParser::ParseRelational(vstToken::iterator& iter)
 {
-	stRelational* pRel = new stRelational();
+	stExpression* pArith = ParseArithmetic(false, iter);
 
-	// Priority 0: *, /, %
-	// Priority 1: +, -
+	while (m_setRelOp.count(iter->eLex))
+	{
+		stRelational* pRel = new stRelational();
+		pRel->eType = iter->eLex;
+		NextIter(iter->eLex, iter);
+		pRel->stLeft = pArith;
+		pRel->stRight = ParseArithmetic(false, iter);
+		pArith = pRel;
+	}
 
-	// TODO Input Code ParseRelational
-
-	return pRel;
+	return pArith;
 }
 
 /**
@@ -710,13 +754,33 @@ stExpression* CParser::ParseRelational(vstToken::iterator& iter)
 @param		iter		Token iterator
 @return		Token to "Arithmetic expression" structure
 */
-stExpression* CParser::ParseArithmetic(vstToken::iterator& iter)
+stExpression* CParser::ParseArithmetic(bool bIsPriority, vstToken::iterator& iter)
 {
-	stArithmetic* pArith = new stArithmetic();
+	std::unordered_set<CLexer::eLexEnum>* pOp = nullptr;
+	stExpression* pExp = nullptr;
 
-	// TODO Input Code ParseArithmetic
+	if (bIsPriority)
+	{
+		pOp = &m_setCalOp1;
+		pExp = ParseUnary(iter);
+	}
+	else 
+	{
+		pOp = &m_setCalOp2;
+		pExp = ParseArithmetic(true, iter);
+	}
 
-	return pArith;
+	while (pOp->count(iter->eLex))
+	{
+		stArithmetic* pArith = new stArithmetic();
+		pArith->eType = iter->eLex;
+		NextIter(iter->eLex, iter);
+		pArith->stLeft = pExp;
+		pArith->stRight = bIsPriority ? ParseUnary(iter) : ParseArithmetic(true, iter);
+		pExp = pArith;
+	}
+
+	return pExp;
 }
 
 /**
@@ -726,11 +790,16 @@ stExpression* CParser::ParseArithmetic(vstToken::iterator& iter)
 */
 stExpression* CParser::ParseUnary(vstToken::iterator& iter)
 {
-	stUnary* pUn = new stUnary();
+	if (m_setCalOp2.count(iter->eLex))
+	{
+		stUnary* pUn = new stUnary();
+		pUn->eType = iter->eLex;
+		NextIter(iter->eLex, iter);
+		pUn->stSubExp = ParseUnary(iter);
+		return pUn;
+	}
 
-	// TODO Input Code ParseUnary
-
-	return pUn;
+	return ParseDataType(iter);
 }
 
 /**
